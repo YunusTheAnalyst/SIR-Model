@@ -1,0 +1,228 @@
+---
+title: "PMA Data Analysis"
+author: "Group 2"
+date: '2022-07-01'
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message= FALSE, warning = FALSE)
+```
+
+
+```{r}
+library(readr)
+PMA_DATA <- read_csv("PMA2018_KER7_HHQFQ_2Dec2019.csv")
+```
+
+## Loading the required packages
+```{r}
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(tidyr)
+library(stringr)
+library(broom)
+```
+
+## Some basic descriptives.
+Finding out the number of women within the study criteria
+
+```{r}
+kable(PMA_DATA%>% 
+  select(county,age,gender, current_method) %>% 
+  subset(gender==2) %>% 
+  filter(between (age,15,49)) %>% 
+  group_by(county) %>% 
+  summarise(total=n()) %>% 
+  mutate(rate=(total/sum(total))*100))
+```
+
+## Most preferred family planning method
+The study focuses on women aged(15-49)
+-99 values are recoded asNo response
+```{r}
+FP_preferred<-PMA_DATA %>% 
+  select(age,gender, current_method) %>% 
+  mutate(age=as.numeric(age)) %>% 
+  subset(gender==2) %>% 
+  filter(between (age,15,49)) %>% 
+  group_by(current_method) %>% 
+  summarize(total=n()) %>% 
+  drop_na()
+FP_preferred$current_method[FP_preferred$current_method== "-99"]<-"No Response"
+```
+
+
+## Awareness to FP
+To find the individuals who were aware of at least a single FP method, logical operations of OR is used. 
+It is applied on the heard of columns and a nested if command is used to generate a column indicating awareness rates.
+```{r}
+FP_access<-PMA_DATA %>% 
+  select(age,gender, current_method,heard_female_sterilization:heard_other) %>% 
+  mutate(age=as.numeric(age)) %>% 
+  subset(gender==2) %>% 
+  filter(between (age,15,49)) %>% 
+  select(heard_female_sterilization:heard_other) %>% 
+  drop_na()
+
+fpheard<-colnames(FP_access)
+fpheard_values<-tibble(colSums(FP_access))
+accessfp<-data.frame(fpheard)
+d<-data.frame(accessfp,fpheard_values)
+FP_access2<-d %>% 
+  mutate(Number_of_individuals=colSums(FP_access),
+         Rate=round((Number_of_individuals/sum(Number_of_individuals))*100,2),
+         Awareness_Rate=paste0(Rate, "%"),
+         Not_Aware=nrow(FP_access)-Number_of_individuals) %>%
+  select(-colSums.FP_access.)
+```
+
+### Test for independence
+Is it possible to test the claim that all major FP methods have the same awareness rates?
+```{r}
+access_long<-pivot_longer(FP_access, values_to = "Heard_of", names_to = "FP_Type", cols = (1:16))
+
+access_prop<-access_long [!(access_long$Heard_of== -99),]
+
+f<-table(access_prop$FP_Type,access_prop$Heard_of)
+
+chisq.test(f)
+```
+
+```{r}
+ggplot(FP_access2) +
+ aes(x = fpheard, fill = fpheard, weight = Rate) +
+ geom_bar() +
+ scale_fill_manual(values = c(heard_beads = "#0C0B0B", 
+ heard_diaphragm = "#E48432", heard_emergency = "#4E3907", heard_female_condoms =  "#05FF85",
+ heard_female_sterilization = "#7FAC07", 
+ heard_foamjelly = "#31B425", heard_implants = "#94BFA5", heard_injectables = "#00BF83", heard_IUD = "#B2D800", 
+ heard_LAM = "#00BAD5", heard_male_condoms = "#A80606", heard_male_sterilization = "#549FFB", 
+ heard_other = "#D1BF00", heard_pill = "#D274FB", heard_rhythm = "#201E20", heard_withdrawal = "#FF61C3")) +
+ labs(x = "FP Type", y = "Rate in %", title = "Awareness of FP Methods", 
+      subtitle = "Among women of ages 15-49") +
+ coord_flip() +
+ ggthemes::theme_wsj() +
+ theme(legend.position = "none", plot.title = element_text(face = "bold"), plot.subtitle = element_text(face = "italic"), axis.title = element_text())
+```
+
+###Overall Awareness Rates of Familiy planning Methods
+```{r}
+Awareness<-FP_access %>% 
+  mutate(Aware=as.numeric(if_else(heard_female_sterilization|heard_male_sterilization|heard_implants|heard_IUD|
+                                    heard_injectables|heard_pill|heard_emergency|heard_male_condoms|heard_female_condoms|
+                                    heard_diaphragm|heard_foamjelly|heard_beads|heard_LAM|heard_rhythm|heard_withdrawal
+                                  == "1", "1", "0")),
+         IsAware=if_else(Aware=="1", "Yes","No")) %>% 
+  group_by(IsAware) %>% 
+  summarise(Count=n()) %>% 
+  mutate(Rate=round((Count/sum(Count))*100,2),
+         Awareness_Rate=paste0(Rate, "%"),
+         cumulative_ratio=cumsum(Rate),
+         ration_min=c(0, head(cumulative_ratio,n=-1)),
+         labelPosition=(cumulative_ratio+ration_min)/2,
+         label=paste0(IsAware, ":", Awareness_Rate))
+
+ggplot(Awareness,aes(ymax=cumulative_ratio, ymin=ration_min, xmax=4, xmin=3, fill=IsAware))+
+  geom_rect()+
+  scale_fill_manual(values = c(No = "#FFAFEEEE", 
+                               Yes = "#808080"))+
+  geom_label(x=4.0,aes(y=labelPosition, label=label),size=6)+
+  coord_polar(theta="y")+
+  xlim(c(-1,4))+
+  labs(title="FP Awareness Rate Among Women of Reproductive Age(15-49)")+
+  theme_void()+
+  theme(legend.position = "none")
+```
+
+## Logistic Regression
+### Preping the data
+Creating dummy variables. The response variable is generated fro the current method column such that if a woman reports to be using a method then value 1 is used else 0.
+Other Dummy variables include IsReligious from religion column.
+Note that missing values and no responses are recoded as 0.
+```{r}
+FP_Data<-PMA_DATA %>% 
+  mutate(age=as.numeric(age)) %>% 
+  filter(between (age,15,49)) %>% 
+  mutate(Aware=as.numeric(if_else(heard_female_sterilization|heard_male_sterilization|heard_implants|heard_IUD|
+                                          heard_injectables|heard_pill|heard_emergency|heard_male_condoms|heard_female_condoms|
+                                    heard_diaphragm|heard_foamjelly|heard_beads|heard_LAM|heard_rhythm|heard_withdrawal
+                                  == "1", "1", "0")),
+         IsAware=if_else(Aware=="1", "Yes","No")) %>% 
+  select(age,gender,current_method,religion, method_influences_pro,ever_birth, pregnant, 
+         marital_status, school, IsAware) %>%   
+  subset(gender==2)
+
+FP_Data$current_method[FP_Data$current_method== "-99"]<-""
+FP_Data$method_influences_pro[FP_Data$method_influences_pro== "-77"]<-""
+FP_Data$pregnant[FP_Data$pregnant== "-88"]<-""
+FP_Data$religion[FP_Data$religion== "-77"]<-""
+FP_Data$religion[FP_Data$religion== "-88"]<-""
+FP_Data$religion[FP_Data$religion== "-99"]<-""
+
+FP_Data_Clean<-FP_Data %>% 
+  mutate(fp_use=as.numeric(if_else(current_method=="NA","0", "1")),
+         been_influenced=as.numeric(if_else(method_influences_pro=="NA","0", "1")),
+         IsReligious=as.numeric(if_else(religion=="NA","0","1")))
+
+FP_Data_Clean$fp_use[is.na(FP_Data_Clean$fp_use)]<-0
+FP_Data_Clean$been_influenced[is.na(FP_Data_Clean$been_influenced)]<-0
+FP_Data_Clean$IsReligious[is.na(FP_Data_Clean$IsReligious)]<-0
+FP_Data_Clean$pregnant[is.na(FP_Data_Clean$pregnant)]<-0
+FP_Data_Clean$ever_birth[is.na(FP_Data_Clean$ever_birth)]<-0
+
+Final_FP<-FP_Data_Clean %>% 
+  select(fp_use,age,IsReligious,marital_status,pregnant,been_influenced,ever_birth,school, IsAware) %>% 
+  mutate(fp_use=as.factor(fp_use),
+         pregnant=as.numeric(pregnant))
+```
+
+### Logistic Model 1
+```{r}
+model1<-glm(fp_use~., family="binomial", data=Final_FP)
+summary(model1)
+```
+
+###Logistic model 2
+Transforming age into logs to try and check for significance
+```{r}
+model2<-glm(fp_use~school+ever_birth+marital_status+log(age), family="binomial", data=Final_FP)
+summary(model2)
+```
+###Logistic Model 3
+```{r}
+model3<-glm(fp_use~school+ever_birth+marital_status+IsReligious+IsAware, family="binomial", data=Final_FP)
+summary(model3)
+tidy(model3)
+```
+### Tabulating model 3 parameters in HTML formatand generating McFadden's statistic
+The packages below help render beautiful output of logistic model parameters including the parameters'  odds ratios,their CI's, p-values as well as McFadden's statistic
+```{r}
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+tab_model(model3)
+```
+### Testing the claim whether awareness equals use
+Performing a two sample t-test to compare means between women who are aware of FP methods and those who actually use
+```{r}
+FP<-Final_FP %>%  
+  select(fp_use,IsAware) %>% 
+  mutate(Aware=as.numeric(if_else(IsAware=="Yes","1","0")),
+         fp=as.numeric(if_else(fp_use=="1","1","0"))) %>% 
+  drop_na()
+t.test(x=FP$Aware, y=FP$fp, alternative = "two.sided", conf.level = 0.95)
+```
+
+```{r}
+tidy(t.test(x=FP$Aware, y=FP$fp, alternative = "two.sided", conf.level = 0.95))
+```
+### Model 3 diagnostic plots
+```{r}
+plot(model3)
+```
+

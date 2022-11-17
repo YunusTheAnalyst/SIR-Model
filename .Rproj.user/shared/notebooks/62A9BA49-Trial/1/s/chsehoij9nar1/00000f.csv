@@ -1,0 +1,8 @@
+"0","library(readxl)"
+"0","library(zoo)"
+"0","monthly_data <- read_excel(""monthly data.xlsx"", "
+"0","    col_types = c(""text"", ""date"", ""numeric"", "
+"0","        ""numeric"", ""numeric"", ""numeric"", "
+"0","        ""text"")) %>% "
+"0","  select(-c(6,7))"
+"0","monthly_data$Period<-as.yearmon(monthly_data$Month)"

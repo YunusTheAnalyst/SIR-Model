@@ -1,0 +1,8 @@
+"0","Rdata<-Ro_Month %>% "
+"0","  select(Status,Month, Ro) %>% "
+"0","  slice(-19) %>% "
+"0","  mutate(Time=c(1:18))"
+"0","write.csv(Rdata, ""E:\\4.1\\Project\\SIRModel\\Rdata.csv"", row.names = FALSE)"
+"2","Error in file(file, ifelse(append, ""a"", ""w"")) : 
+  cannot open the connection
+"

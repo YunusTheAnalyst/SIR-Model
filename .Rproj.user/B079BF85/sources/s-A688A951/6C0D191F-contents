@@ -1,0 +1,382 @@
+---
+title: "ANALYSIS OF KENYA COVID-19 USING SIR MODEL"
+author: "Group 1"
+date: "`r Sys.Date()`"
+output:
+  word_document: 
+    fig_width: 9
+    fig_height: 6
+  pdf_document: default
+  html_document: 
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+## Set Chunk requirements
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+```
+
+## loading Relevant packages and Data Set
+
+```{r Import relevant packages}
+#Import relevant packages
+
+## tidyverse includes readr, ggplot2, dplyr, forcats, tibble, tidyr, purrr, stringr
+library(tidyverse) 
+library(readxl)
+library(janitor)
+library(lubridate)
+## loading the csv data set
+S_I_R_V2 <- read_excel("S_I_R V2.xlsx", sheet = "Sheet1")%>%
+  clean_names()%>%
+  select(-6,-7)%>%
+mutate(population = gsub(",", "", population))%>%
+mutate(population = as.numeric(population))
+```
+
+## Sir Models
+
+### Building a two compartment model in R
+
+```{r}
+#Load required libraries
+library(deSolve)
+library(reshape2)
+library(plotly)
+```
+
+```{r}
+# Model inputs
+
+initial_values1<-c(I=S_I_R_V2$number_of_infected[S_I_R_V2$x2020 == "Total"]/18, R=0)
+
+#initial_values1<-c(I=sum(Owid_Covid_Kenya$cases_new)/18, R=0)
+
+parameters1<-c(beta=round(1/14,2))
+
+# Time points
+
+time1=seq(from=0,t=31,by=1)
+
+# SIR model function
+
+sir_model1 <-function(time1,state,parameters1){
+  with(as.list(c(state,parameters1)),{
+    dI=-beta*I
+    dR=beta*I
+    return(list(c(dI,dR)))
+  }
+)  
+}
+
+#Solving the differential equation
+output1<-as.data.frame(ode(y=initial_values1,func =   sir_model1,parms=parameters1,times = time1))
+
+#To convert the dataframe to long   format
+out_long1=melt(output1,id="time") 
+
+ggplot(data = out_long1,          
+       aes(x = time, y = value, colour = variable)) +  
+  geom_line() +                                                          
+    scale_x_continuous(n.breaks = 16)+
+    scale_y_continuous(n.breaks = 13)+
+  labs(title = "Average Infected and Recovered for beta = 1/14",
+       subtitle = "Mar 2021 - Aug 2021",
+       x = "Time (days)",
+       y = "No: of people")+
+    scale_color_discrete(name="State")
+```
+We observe that on a monthly average, half of the infected cohort recovers in around 10 days
+
+### Simple SIR Model
+```{r}
+
+#The mean infectious period for covid- 19 is 14 days and a person infects one #person on average every 7 days.
+
+# Model inputs
+
+initial_state_values=c(S=as.numeric(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"])-1,
+                       I=1,R=0)
+parameters=c(beta=round(1/14,2),alpha=round(1/7,2))
+
+# Time points
+
+time=seq(from=1,
+         to=length(seq(as.Date("2020/03/13"), as.Date("2021/08/31"), by=1))
+         ,by=1)
+
+```
+
+
+```{r}
+# SIR model function 
+
+sir_model2 <- function(time,state,parameters){
+  with(as.list(c(state,parameters)),{
+    N=S+I+R
+    dS=-alpha*S*(I/N)
+    dI= alpha*S*(I/N)-beta*I
+    dR= beta*I
+    
+    return(list(c(dS,dI,dR)))
+  }
+  )
+}
+
+#Solving the differential equations
+output2<-as.data.frame(ode(y=initial_state_values,func = sir_model2,parms=parameters,times = time))%>%
+  mutate(S = format(S, scientific = F, digits = 1))%>%
+  mutate(I = format(I, scientific = F, digits = 1))%>%
+  mutate(R = format(R, scientific = F, digits = 1))%>%
+  mutate(across(c(2:4), as.numeric))
+
+out_long2 <- melt(output2,id="time")
+# To plot the proportion of susceptible, infected and recovered individuals over time
+ggplot(data = out_long2,          
+       aes(x = time, 
+           y = value/S_I_R_V2$population[S_I_R_V2$x2020 == "Total"], colour = variable)) +  
+  geom_line() +
+  #scale_x_continuous(n.breaks = 20)+
+  scale_x_continuous(breaks = seq(0, length(seq(as.Date("2020/03/13"), as.Date("2021/08/31"), by=1)), by = 30))+
+    scale_y_continuous(n.breaks = 10)+
+  xlab("Time (days)")+
+  ylab("Proportion of the population")+
+  scale_color_discrete(name="State")
+
+```
+
+## Estimating Basic reproduction number and infection rate (beta)
+### Counting Process
+```{r}
+#As at march 2020 - August 2021
+p_Mar20_Aug21 = 1- ((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- S_I_R_V2$number_of_infected[S_I_R_V2$x2020 == "Total"]-S_I_R_V2$number_of_recovered[S_I_R_V2$x2020 == "Total"])/(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]))
+
+theta_Mar20_Aug21 = -log(1-p_Mar20_Aug21)/S_I_R_V2$number_of_recovered[S_I_R_V2$x2020 == "Total"]
+
+R_o_Mar20_Aug21 = S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]*theta_Mar20_Aug21
+
+Beta_Mar20_Aug21 = R_o_Mar20_Aug21 * (1/14)
+
+Ut_Mar20_Aug21 = R_o_Mar20_Aug21 * ((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- S_I_R_V2$number_of_infected[S_I_R_V2$x2020 == "Total"]-S_I_R_V2$number_of_recovered[S_I_R_V2$x2020 == "Total"])/(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]-1))
+
+
+se_theta_Mar20_Aug21 = (((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]/((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]-1)^2 + 0.5))+(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]/((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]-1)^2+0.5))-((theta_Mar20_Aug21^2)*Ut_Mar20_Aug21))^(1/2))/S_I_R_V2$number_of_recovered[S_I_R_V2$x2020 == "Total"]
+
+
+se_R_o_Mar20_Aug21 = S_I_R_V2$population[S_I_R_V2$x2020 == "Total"] * se_theta_Mar20_Aug21
+
+R_o_Mar20_Aug21_interval = paste(R_o_Mar20_Aug21 - 1.96*se_R_o_Mar20_Aug21, R_o_Mar20_Aug21 + 1.96*se_R_o_Mar20_Aug21)
+
+```
+
+```{r}
+#As at beginning 
+p_beginning = 1- ((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- 84-79)/(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]))
+
+theta_beginning = -log(1-p_beginning)/79
+
+R_o_beginning = S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]*theta_beginning
+
+Beta_beginning = R_o_beginning * (1/14)
+
+
+```
+
+
+```{r}
+#Total Lockdown
+p_TotalLockdown = 1 - ((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Total Lockdown")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown")]))/(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]))
+
+theta_TotalLockdown = -log(1-p_TotalLockdown)/sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown")])  
+
+R_o_TotalLockdown = S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]*theta_TotalLockdown
+
+Beta_TotalLockdown = R_o_TotalLockdown * (1/14)
+
+Ut_TotalLockdown = R_o_TotalLockdown * ((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Total Lockdown")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown")]))/(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]-1))
+
+
+se_theta_TotalLockdown = (((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]/((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]-1)^2 + 0.5))+(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]/((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]-1)^2+0.5))-((theta_TotalLockdown^2)*Ut_TotalLockdown))^(1/2))/sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown")])
+
+
+se_R_o_TotalLockdown = S_I_R_V2$population[S_I_R_V2$x2020 == "Total"] * se_theta_TotalLockdown
+
+R_o_TotalLockdown_interval = paste(R_o_TotalLockdown - 1.96*se_R_o_TotalLockdown, R_o_TotalLockdown + 1.96*se_R_o_TotalLockdown)
+```
+
+```{r}
+#Partially opening
+p_Partiallyopening = 1 - ((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Partially opening")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Partially opening")]))/(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]))
+
+theta_Partiallyopening = -log(1-p_Partiallyopening)/sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Partially opening")])  
+
+R_o_Partiallyopening = S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]*theta_Partiallyopening
+
+Beta_Partiallyopening = R_o_Partiallyopening * (1/14)
+
+Ut_Partiallyopening = R_o_Partiallyopening * ((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Partially opening")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Partially opening")]))/(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Total Lockdown")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown")])))
+
+se_theta_Partiallyopening = (((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]/((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Total Lockdown")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown")]))^2 + 0.5))+(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]/((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Total Lockdown")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown")]))^2+0.5))-((theta_Partiallyopening^2)*Ut_Partiallyopening))^(1/2))/sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Partially opening")])
+
+
+se_R_o_Partiallyopening = S_I_R_V2$population[S_I_R_V2$x2020 == "Total"] * se_theta_Partiallyopening
+
+R_o_Partiallyopening_interval = paste(R_o_Partiallyopening - 1.96*se_R_o_Partiallyopening, R_o_Partiallyopening + 1.96*se_R_o_Partiallyopening)
+```
+
+```{r}
+#Reopening
+p_Reopening = 1 - ((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Reopening")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Reopening")]))/(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]))
+
+theta_Reopening = -log(1-p_Reopening)/sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Reopening")])  
+R_o_Reopening = S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]*theta_Reopening
+
+Beta_Reopening = R_o_Reopening * (1/14)
+
+Ut_Reopening = R_o_Reopening * ((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Reopening")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Reopening")]))/(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Total Lockdown"| S_I_R_V2$status == "Partially opening")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown"|S_I_R_V2$status == "Partially opening")])))
+
+se_theta_Reopening = (((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]/((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Total Lockdown"| S_I_R_V2$status == "Partially opening")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown"|S_I_R_V2$status == "Partially opening")]))^2 + 0.5))+(S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]/((S_I_R_V2$population[S_I_R_V2$x2020 == "Total"]- sum(S_I_R_V2$number_of_infected[which(S_I_R_V2$status == "Total Lockdown"| S_I_R_V2$status == "Partially opening")])-sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Total Lockdown"|S_I_R_V2$status == "Partially opening")]))^2+0.5))-((theta_Reopening^2)*Ut_Reopening))^(1/2))/sum(S_I_R_V2$number_of_recovered[which(S_I_R_V2$status == "Reopening")])
+
+
+se_R_o_Reopening = S_I_R_V2$population[S_I_R_V2$x2020 == "Total"] * se_theta_Reopening
+
+R_o_Reopening_interval = paste(R_o_Reopening - 1.96*se_R_o_Reopening, R_o_Reopening + 1.96*se_R_o_Reopening)
+```
+
+```{r}
+counting_process_output <- tibble( status = c("Beginning", "Mar2020-Aug2021", "Total Lockdown", "Partially opening", "Reopening" ),
+        Ro = round( c(R_o_beginning, R_o_Mar20_Aug21 ,
+          R_o_TotalLockdown, R_o_Partiallyopening, R_o_Reopening),4),
+        infection_rate_Beta = round(c(Beta_beginning, Beta_Mar20_Aug21 ,
+          Beta_TotalLockdown, Beta_Partiallyopening, Beta_Reopening), 4),
+        Ro_95CI = c( NA,
+                     paste("( ", round(R_o_Mar20_Aug21 - 1.96*se_R_o_Mar20_Aug21,4), ", ", round(R_o_Mar20_Aug21 + 1.96*se_R_o_Mar20_Aug21,4), " )", sep = ""),
+                     paste("( ", round(R_o_TotalLockdown - 1.96*se_R_o_TotalLockdown,4), ", ", round(R_o_TotalLockdown + 1.96*se_R_o_TotalLockdown,4), " )", sep = ""),
+                     paste("( ", round(R_o_Partiallyopening - 1.96*se_R_o_Partiallyopening,4), ", ", round(R_o_Partiallyopening + 1.96*se_R_o_Partiallyopening,4), " )", sep = ""),
+                     paste("( ", round(R_o_Reopening - 1.96*se_R_o_Reopening,4), ", ", round(R_o_Reopening + 1.96*se_R_o_Reopening,4), " )", sep = ""))
+                                   )
+
+library(knitr)
+kable(counting_process_output)
+```
+
+
+```{r}
+library(readxl)
+library(zoo)
+monthly_data <- read_excel("monthly data.xlsx", 
+    col_types = c("text", "date", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "text")) %>% 
+  select(-c(6,7))
+monthly_data$Period<-as.yearmon(monthly_data$Month)
+```
+
+### Computing Ro for monthly values
+```{r}
+So=(monthly_data$Population[1]-monthly_data$Infected[1]-monthly_data$Recovered[1])
+n=monthly_data$Population[19]
+Ro_Month<-monthly_data %>% 
+  mutate(p=(1-((Population-Infected-Recovered)/Population[Status=="Total"])),
+         theta=(-log(1-p))/Recovered,
+         Ro=Population[Status=="Total"]*theta,
+         infection_rate= Ro*(1/14),
+         ST=Population-Infected-Recovered,
+         UT=Ro*(ST/So),
+         SE_theta=((2*(n/((n-1)^2+0.5)))-((theta^2)*UT))^0.5/Recovered) %>% 
+  slice(-19)
+Rdata<-Ro_Month %>% select(Status,Month,Ro) %>% 
+  mutate(Time=c(1:18))
+```
+
+
+### Statistical Analyses of Ro
+1. Descriptive Statistics
+```{r}
+sumarydata<-monthly_data %>% 
+  slice(-19) %>%
+  select(-Period) %>% 
+  mutate(Status=as.factor(Status))
+
+sad<-sumarydata %>% 
+  group_by(Status) %>%
+  summarise(Total_Infected=sum(Infected),
+            Total_Recovered=sum(Recovered))
+
+cor(counting_process_output$infection_rate_Beta,counting_process_output$Ro)
+
+ggplot(Rdata) +
+  aes(x = Time, y = Ro) +
+  geom_line(size = 0.5, colour = "#2E80D0") +
+  scale_x_continuous(n.breaks = 18)+
+  labs(x = "Time", y = "Ro", title = "Monthly Values for R0") +
+  theme_minimal()
+```
+
+2. ANOVA
+QN: Were the lockdowns significant in reducing the values of Ro?
+```{r}
+Rdata<-Ro_Month %>% 
+  select(Status,Month, Ro) %>% 
+  slice(-19) %>% 
+  mutate(Time=c(1:18))
+write.csv(Rdata, "E:\\4.1\\Project\\SIRModel\\Rdata.csv", row.names = FALSE)
+mdel<-lm(Ro~Status, data=Rdata)
+anova(mdel)
+library(agricolae)
+LSD.test(mdel,"Status",console = TRUE)
+```
+
+3. Building a time series model
+```{r}
+library(astsa)
+Ro_ts<-ts(Rdata$Ro)
+plot(Ro_ts, type="o")
+```
+-There is a general downward trend
+-no visible seasonality
+-no constancy of variance 
+-There are no outliers in the series
+
+```{r}
+lag1.plot(Ro_ts,1)
+```
+
+```{r}
+acf2(Ro_ts)
+```
+-The acf plot tappers towards zero and the Pacf plot has one significant spike and shuts off the rest of the lags.
+-This is an AR(1) model.This model predicts future values based on the past values.
+
+```{r}
+sarima(Ro_ts,1,0,0,)
+```
+-The standard residuals plot shows no trend which is a good results
+- The acf plot for their residuals have all the values insignificant indicating that its a good model for prediction.
+-The normal qq plot shows normality because all the values lies within the line of fit
+- All ljung box statistics are insignificant.That's a good result
+- the values of BIC,AIC and variance are very low. thats  a good results.
+
+Coefficients:
+         ar1   xmean
+      0.9294  2.0333
+s.e.  0.0862  0.0163
+
+
+c=xmean(1-ar1(coefficient))
+= 2.0333(1-0.9294)
+= 0.1436
+
+Model
+
+y= 0.1436 + 0.9294Xt-1 + Wt
+
+Estimate          SE   t.value   p.value
+ar1     0.9294 0.0862  10.7778       0
+xmean   2.0333 0.0163 124.8727       0
+
+The p value for the ar1 coefficient is zero showing that the coefficient is significant in the model.
+```{r}
+sarima.for(Ro_ts,4,1,0,0)
+```

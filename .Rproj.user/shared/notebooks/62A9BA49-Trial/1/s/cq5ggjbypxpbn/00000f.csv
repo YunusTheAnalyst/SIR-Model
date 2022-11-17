@@ -1,0 +1,8 @@
+"0","#As at beginning "
+"0","p_beginning = 1- ((S_I_R_V2$population[S_I_R_V2$x2020 == ""Total""]- 84-79)/(S_I_R_V2$population[S_I_R_V2$x2020 == ""Total""]))"
+"0",""
+"0","theta_beginning = -log(1-p_beginning)/79"
+"0",""
+"0","R_o_beginning = S_I_R_V2$population[S_I_R_V2$x2020 == ""Total""]*theta_beginning"
+"0",""
+"0","Beta_beginning = R_o_beginning * (1/14)"

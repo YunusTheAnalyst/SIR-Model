@@ -1,0 +1,52 @@
+library(gganimate)
+library(ggplot2)
+library(dplyr)
+library(gapminder)
+library(ggthemes)
+library(gifski)
+
+sirmodel1plot<-ggplot(data = out_long1,          
+                      aes(x = time, y = value, colour = variable)) +  
+  geom_line() +                                                          
+  scale_x_continuous(n.breaks = 16)+
+  scale_y_continuous(n.breaks = 13)+
+  labs(title = "Average Infected and Recovered for beta = 1/14",
+       subtitle = "Monthly values",
+       x = "Time (days)",
+       y = "No: of people")+
+  scale_color_discrete(name="State")+
+  geom_point()
+
+sirmodel1plot.animation=sirmodel1plot+
+  transition_reveal(time)
+
+animate(sirmodel1plot.animation, height=500,width=800, fps=30, duration = 10,
+        end_pause = 60, res=100)
+anim_save("SIRmodel1plot1.gif")
+
+sirmodel1plot.animation
+
+
+
+animm<-ggplot(Rdata) +
+  aes(x = Status, y = Ro, fill = Status) +
+  geom_boxplot(shape = "circle") +
+  scale_fill_hue(direction = 1) +
+  labs(
+    subtitle = "Status: {closest_state}",
+    x = "Status",
+    y = "R0",
+    title = "Box Plot for R0 Values",
+    fill = "Status"
+  ) +
+  ggthemes::theme_wsj() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))+
+  transition_states(Status,
+                    transition_length = 2,
+                    state_length = 1)+
+  shadow_wake(wake_length = .3)
+
+animate(animm,duration = 15)
+ 
+anim_save("R0_Boxplot1.gif")
+

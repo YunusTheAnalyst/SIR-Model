@@ -1,0 +1,21 @@
+TY  - JOUR
+A2  - Singh, Dilbag
+AU  - Alanazi, Saad Awadh
+AU  - Kamruzzaman, M. M.
+AU  - Alruwaili, Madallah
+AU  - Alshammari, Nasser
+AU  - Alqahtani, Salman Ali
+AU  - Karime, Ali
+PY  - 2020
+DA  - 2020/11/02
+TI  - Measuring and Preventing COVID-19 Using the SIR Model and Machine Learning in Smart Health Care
+SP  - 8857346
+VL  - 2020
+AB  -         COVID-19 presents an urgent global challenge because of its contagious nature, frequently changing characteristics, and the lack of a vaccine or effective medicines. A model for measuring and preventing the continued spread of COVID-19 is urgently required to provide smart health care services. This requires using advanced intelligent computing such as artificial intelligence, machine learning, deep learning, cognitive computing, cloud computing, fog computing, and edge computing. This paper proposes a model for predicting COVID-19 using the SIR and machine learning for smart health care and the well-being of the citizens of KSA. Knowing the number of susceptible, infected, and recovered cases each day is critical for mathematical modeling to be able to identify the behavioral effects of the pandemic. It forecasts the situation for the upcoming 700 days. The proposed system predicts whether COVID-19 will spread in the population or die out in the long run. Mathematical analysis and simulation results are presented here as a means to forecast the progress of the outbreak and its possible end for three types of scenarios: &#x201c;no actions,&#x201d; &#x201c;lockdown,&#x201d; and &#x201c;new medicines.&#x201d; The effect of interventions like lockdown and new medicines is compared with the &#x201c;no actions&#x201d; scenario. The lockdown case delays the peak point by decreasing the infection and affects the area equality rule of the infected curves. On the other side, new medicines have a significant impact on infected curve by decreasing the number of infected people about time. Available forecast data on COVID-19 using simulations predict that the highest level of cases might occur between 15 and 30 November 2020. Simulation data suggest that the virus might be fully under control only after June 2021. The reproductive rate shows that measures such as government lockdowns and isolation of individuals are not enough to stop the pandemic. This study recommends that authorities should, as soon as possible, apply a strict long-term containment strategy to reduce the epidemic size successfully.
+SN  - 2040-2295
+UR  - https://doi.org/10.1155/2020/8857346
+DO  - 10.1155/2020/8857346
+JF  - Journal of Healthcare Engineering
+PB  - Hindawi
+KW  - 
+ER  - 

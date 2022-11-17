@@ -1,0 +1,28 @@
+{
+    "id": "E39FD3E9",
+    "path": null,
+    "project_path": null,
+    "type": "object_explorer",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1656750550585.0,
+    "source_on_save": false,
+    "relative_order": 6,
+    "properties": {
+        "id": "934519045fb7497b8052937225ff7b5f",
+        "name": "sirmodel1plot.animation",
+        "title": "sirmodel1plot.animation",
+        "language": "R",
+        "source_window_id": "",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 2490340633032,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1656750550585,
+    "read_only": false,
+    "read_only_alternatives": []
+}
